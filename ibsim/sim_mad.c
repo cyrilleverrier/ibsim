@@ -48,6 +48,14 @@
 #include <ibsim.h>
 #include "sim.h"
 
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+
 #undef DEBUG
 #define DEBUG	if (simverb > 1 || ibdebug) IBWARN
 #define VERB	if (simverb || ibdebug) IBWARN
@@ -55,6 +63,8 @@
 #define ERR_METHOD_UNSUPPORTED	(2 << 2)
 #define ERR_ATTR_UNSUPPORTED	(3 << 2)
 #define ERR_BAD_PARAM		(7 << 2)
+
+#define MAD_FIELD_VALUE_NOP (0)
 
 typedef int (Smpfn) (Port * port, unsigned op, uint32_t mod, uint8_t * data);
 typedef int (EncodeTrapfn) (Port * port, char *data);
@@ -494,11 +504,12 @@ do_portinfo(Port * port, unsigned op, uint32_t portnum, uint8_t * data)
 		portnum = port->portnum;
 
 	p = node_get_port(node, portnum);
-	DEBUG("in node %" PRIx64 " port %" PRIx64 ": port %" PRIx64 " (%d(%d))",
-	      node->nodeguid, port->portguid, p->portguid, p->portnum, portnum);
+	DEBUG("in node %" PRIx64 " port %" PRIx64 ": port %" PRIx64 " (%d(%d)). Method: %s",
+	      node->nodeguid, port->portguid, p->portguid, p->portnum, portnum, op == IB_MAD_METHOD_SET ? "SET":"GET");
 
 	if (op == IB_MAD_METHOD_SET) {
 		unsigned val;
+		int has_local_changes = FALSE;
 		if (node->type != SWITCH_NODE && port->portnum != p->portnum)
 			return ERR_BAD_PARAM;	// on HCA or rtr can't "set" on other port
 		newlid = mad_get_field(data, 0, IB_PORT_LID_F);
@@ -509,7 +520,16 @@ do_portinfo(Port * port, unsigned op, uint32_t portnum, uint8_t * data)
 		}
 		p->lid = newlid;
 		p->smlid = mad_get_field(data, 0, IB_PORT_SMLID_F);
-              //p->linkwidth = mad_get_field(data, 0, IB_PORT_LINK_WIDTH_ENABLED_F); // ignored
+
+		if (mad_get_field(data, 0, IB_PORT_LINK_WIDTH_ENABLED_F) != MAD_FIELD_VALUE_NOP) {
+			p->linkwidthena = mad_get_field(data, 0, IB_PORT_LINK_WIDTH_ENABLED_F);
+			has_local_changes = TRUE;
+		}
+		if (mad_get_field(data, 0, IB_PORT_LINK_SPEED_ENABLED_F) != MAD_FIELD_VALUE_NOP) {
+			p->linkspeedena = mad_get_field(data, 0, IB_PORT_LINK_SPEED_ENABLED_F);
+			has_local_changes = TRUE;
+		}
+
 		p->lmc = mad_get_field(data, 0, IB_PORT_LMC_F);
 		p->hoqlife = mad_get_field(data, 0, IB_PORT_HOQ_LIFE_F);
 		if ((r = mad_get_field(data, 0, IB_PORT_PHYS_STATE_F)))
@@ -553,6 +573,10 @@ do_portinfo(Port * port, unsigned op, uint32_t portnum, uint8_t * data)
 		if (val > mad_get_field(data, 0, IB_PORT_VL_CAP_F))
 			return ERR_BAD_PARAM;
 		p->op_vls = val;
+
+		if (has_local_changes == TRUE) {
+			send_trap(port, TRAP_144);
+		}
 	}
 
 	update_portinfo(p);
@@ -575,8 +599,8 @@ do_extportinfo(Port * port, unsigned op, uint32_t portnum, uint8_t * data)
 		portnum = port->portnum;
 
 	p = node_get_port(node, portnum);
-	DEBUG("in node %" PRIx64 " port %" PRIx64 ": port %" PRIx64 " (%d(%d))",
-	      node->nodeguid, port->portguid, p->portguid, p->portnum, portnum);
+	DEBUG("in node %" PRIx64 " port %" PRIx64 ": port %" PRIx64 " (%d(%d)). Method: %s",
+	      node->nodeguid, port->portguid, p->portguid, p->portnum, portnum, op == IB_MAD_METHOD_SET ? "SET":"GET");
 
 	if (op == IB_MAD_METHOD_SET) {
 		memcpy(p->extportinfo, data, IB_SMP_DATA_SIZE);

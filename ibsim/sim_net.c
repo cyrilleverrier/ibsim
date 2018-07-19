@@ -1279,8 +1279,8 @@ void update_portinfo(Port * p)
 		      LINKWIDTH_1x_2x_4x_12x);
 	mad_set_field(pi, 0, IB_PORT_LINK_WIDTH_ACTIVE_F, p->linkwidth);
 	mad_set_field(pi, 0, IB_PORT_LINK_SPEED_ENABLED_F, p->linkspeedena);
-	mad_set_field(pi, 0, IB_PORT_LINK_SPEED_SUPPORTED_F, p->linkspeedena);
-
+	mad_set_field(pi, 0, IB_PORT_LINK_SPEED_SUPPORTED_F, LINKSPEED_SDR_DDR_QDR);
+	mad_set_field(pi, 0, IB_PORT_LINK_SPEED_ACTIVE_F, p->linkspeed);
 	mad_set_field(pi, 0, IB_PORT_LMC_F, p->lmc);
 	mad_set_field(pi, 0, IB_PORT_HOQ_LIFE_F, p->hoqlife);
 	mad_set_field(pi, 0, IB_PORT_PHYS_STATE_F, p->physstate);
